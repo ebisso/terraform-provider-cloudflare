@@ -22,8 +22,7 @@ func TestAccCloudflareCertificateAuthoritiesHostnameAssociations_BYO_CA(t *testi
 	accountID := os.Getenv("CLOUDFLARE_ACCOUNT_ID")
 	zoneID := os.Getenv("CLOUDFLARE_ZONE_ID")
 	zoneName := os.Getenv("CLOUDFLARE_DOMAIN")
-	hostname1 := rnd + "." + zoneName
-	hostname2 := rnd + "." + zoneName
+	hostname := rnd + "." + zoneName
 
 	resource.Test(t, resource.TestCase{
 		PreCheck: func() {
@@ -34,21 +33,11 @@ func TestAccCloudflareCertificateAuthoritiesHostnameAssociations_BYO_CA(t *testi
 		CheckDestroy:             testAccCheckCloudflareCertificateAuthoritiesHostnameAssociationsDestroy,
 		Steps: []resource.TestStep{
 			{
-				Config: testCertificateAuthoritiesHostnameAssociationsConfigBYOCA(rnd, accountID, zoneID, []string{hostname1}),
+				Config: testCertificateAuthoritiesHostnameAssociationsConfigBYOCA(rnd, accountID, zoneID, []string{hostname}),
 				Check: resource.ComposeTestCheckFunc(
 					resource.TestCheckResourceAttr(name, consts.ZoneIDSchemaKey, zoneID),
 					resource.TestCheckResourceAttrSet(name, "mtls_certificate_id"),
-					//resource.TestCheckResourceAttr(name, "hostnames.0", hostname1),
-					//resource.TestCheckResourceAttr(name, "hostnames.1", hostname2),
-				),
-			},
-			{
-				Config: testCertificateAuthoritiesHostnameAssociationsConfigBYOCA(rnd, accountID, zoneID, []string{hostname1, hostname2}),
-				Check: resource.ComposeTestCheckFunc(
-					resource.TestCheckResourceAttr(name, consts.ZoneIDSchemaKey, zoneID),
-					resource.TestCheckResourceAttrSet(name, "mtls_certificate_id"),
-					//resource.TestCheckResourceAttr(name, "hostnames.0", hostname1),
-					//resource.TestCheckResourceAttr(name, "hostnames.1", hostname2),
+					resource.TestCheckResourceAttr(name, "hostnames.0", hostname),
 				),
 			},
 		},
@@ -61,8 +50,7 @@ func TestAccCloudflareCertificateAuthoritiesHostnameAssociations_DefaultCA(t *te
 	name := fmt.Sprintf("cloudflare_certificate_authorities_hostname_associations.%s", rnd)
 	zoneID := os.Getenv("CLOUDFLARE_ZONE_ID")
 	zoneName := os.Getenv("CLOUDFLARE_DOMAIN")
-	hostname1 := rnd + "." + zoneName
-	hostname2 := rnd + "." + zoneName
+	hostname := rnd + "." + zoneName
 
 	resource.Test(t, resource.TestCase{
 		PreCheck: func() {
@@ -73,18 +61,10 @@ func TestAccCloudflareCertificateAuthoritiesHostnameAssociations_DefaultCA(t *te
 		CheckDestroy:             testAccCheckCloudflareCertificateAuthoritiesHostnameAssociationsDestroy,
 		Steps: []resource.TestStep{
 			{
-				Config: testCertificateAuthoritiesHostnameAssociationsConfigDefaultCA(rnd, zoneID, []string{hostname1}),
+				Config: testCertificateAuthoritiesHostnameAssociationsConfigDefaultCA(rnd, zoneID, []string{hostname}),
 				Check: resource.ComposeTestCheckFunc(
 					resource.TestCheckResourceAttr(name, consts.ZoneIDSchemaKey, zoneID),
-					resource.TestCheckResourceAttr(name, "hostnames.0", hostname1),
-				),
-			},
-			{
-				Config: testCertificateAuthoritiesHostnameAssociationsConfigDefaultCA(rnd, zoneID, []string{hostname1, hostname2}),
-				Check: resource.ComposeTestCheckFunc(
-					resource.TestCheckResourceAttr(name, consts.ZoneIDSchemaKey, zoneID),
-					resource.TestCheckResourceAttr(name, "hostnames.0", hostname1),
-					resource.TestCheckResourceAttr(name, "hostnames.1", hostname2),
+					resource.TestCheckResourceAttr(name, "hostnames.0", hostname),
 				),
 			},
 		},

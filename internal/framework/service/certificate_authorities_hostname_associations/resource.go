@@ -6,8 +6,10 @@ import (
 	"strings"
 
 	cfv1 "github.com/cloudflare/cloudflare-go"
+	"github.com/cloudflare/terraform-provider-cloudflare/internal/framework/expanders"
 	"github.com/cloudflare/terraform-provider-cloudflare/internal/framework/muxclient"
 	"github.com/hashicorp/terraform-plugin-framework/attr"
+	"github.com/hashicorp/terraform-plugin-framework/diag"
 	"github.com/hashicorp/terraform-plugin-framework/path"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/hashicorp/terraform-plugin-framework/types"
@@ -65,7 +67,10 @@ func (r *CertificateAuthoritiesHostnameAssociationsResource) Create(ctx context.
 		return
 	}
 
-	data = buildCertificateAuthoritiesHostnameAssociationsModel(updatedHostnames, data.MTLSCertificateID, data.ZoneID)
+	var diags diag.Diagnostics
+	data, diags = buildCertificateAuthoritiesHostnameAssociationsModel(ctx, updatedHostnames, data.MTLSCertificateID, data.ZoneID)
+	resp.Diagnostics.Append(diags...)
+
 	resp.Diagnostics.Append(resp.State.Set(ctx, &data)...)
 }
 
@@ -88,23 +93,25 @@ func (r *CertificateAuthoritiesHostnameAssociationsResource) Read(ctx context.Co
 		resp.Diagnostics.AddError("error reading Access Mutual TLS Hostname Settings", err.Error())
 		return
 	}
-	data = buildCertificateAuthoritiesHostnameAssociationsModel(hostnames, data.MTLSCertificateID, data.ZoneID)
+
+	var diags diag.Diagnostics
+	data, diags = buildCertificateAuthoritiesHostnameAssociationsModel(ctx, hostnames, data.MTLSCertificateID, data.ZoneID)
+	resp.Diagnostics.Append(diags...)
+
 	resp.Diagnostics.Append(resp.State.Set(ctx, &data)...)
 }
 
 // Helper function used by both Create and Update
 func (r *CertificateAuthoritiesHostnameAssociationsResource) update(ctx context.Context, data *CertificateAuthoritiesHostnameAssociationsModel) ([]cfv1.HostnameAssociation, error) {
-	updatedHostnames := []cfv1.HostnameAssociation{}
+	hostnames := []cfv1.HostnameAssociation{}
 	identifier := cfv1.ZoneIdentifier(data.ZoneID.ValueString())
 
-	hostnames := data.Hostnames
-	for _, hostname := range hostnames.Elements()() {
-		updatedHostnames = append(updatedHostnames, hostname.String())
-	}
+	elements := expanders.StringList(ctx, data.Hostnames)
+	hostnames = append(hostnames, elements...)
 
 	updatedCertificateAuthoritiesHostnameAssociations := cfv1.UpdateCertificateAuthoritiesHostnameAssociationsParams{
 		MTLSCertificateID: data.MTLSCertificateID.ValueString(),
-		Hostnames:         updatedHostnames,
+		Hostnames:         hostnames,
 	}
 
 	tflog.Debug(ctx, fmt.Sprintf("Updating Cloudflare Certificate Authorities Hostname Associations from struct: %+v", updatedCertificateAuthoritiesHostnameAssociations))
@@ -131,7 +138,10 @@ func (r *CertificateAuthoritiesHostnameAssociationsResource) Update(ctx context.
 		return
 	}
 
-	data = buildCertificateAuthoritiesHostnameAssociationsModel(updatedHostnames, data.MTLSCertificateID, data.ZoneID)
+	var diags diag.Diagnostics
+	data, diags = buildCertificateAuthoritiesHostnameAssociationsModel(ctx, updatedHostnames, data.MTLSCertificateID, data.ZoneID)
+	resp.Diagnostics.Append(diags...)
+
 	resp.Diagnostics.Append(resp.State.Set(ctx, &data)...)
 }
 
@@ -180,10 +190,16 @@ func (r *CertificateAuthoritiesHostnameAssociationsResource) ImportState(ctx con
 	)
 }
 
-func buildCertificateAuthoritiesHostnameAssociationsModel(hostnames basetypes.ListValue, mtlsCertificateID basetypes.StringValue, zoneID basetypes.StringValue) *CertificateAuthoritiesHostnameAssociationsModel {
+func buildCertificateAuthoritiesHostnameAssociationsModel(ctx context.Context, hostnames []cfv1.HostnameAssociation, mtlsCertificateID basetypes.StringValue, zoneID basetypes.StringValue) (*CertificateAuthoritiesHostnameAssociationsModel, diag.Diagnostics) {
+	values := []attr.Value{}
+	for _, value := range hostnames {
+		values = append(values, types.StringValue(value))
+	}
+	listValue, diags := types.ListValue(types.StringType, values)
+
 	return &CertificateAuthoritiesHostnameAssociationsModel{
 		ZoneID:            zoneID,
 		MTLSCertificateID: mtlsCertificateID,
-		Hostnames:         hostnames,
-	}
+		Hostnames:         listValue,
+	}, diags
 }
