@@ -5,7 +5,7 @@ import "github.com/hashicorp/terraform-plugin-framework/types"
 type HostnameAssociation = types.String
 
 type CertificateAuthoritiesHostnameAssociationsModel struct {
-	ZoneID            types.String          `tfsdk:"zone_id"`
-	MTLSCertificateID types.String          `tfsdk:"mtls_certificate_id"`
-	Hostnames         []HostnameAssociation `tfsdk:"hostnames"`
+	ZoneID            types.String `tfsdk:"zone_id"`
+	MTLSCertificateID types.String `tfsdk:"mtls_certificate_id"`
+	Hostnames         types.List   `tfsdk:"hostnames"`
 }

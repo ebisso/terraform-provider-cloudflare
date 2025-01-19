@@ -1,9 +1,10 @@
-package certificate_authorities_hostname_associations
+package certificate_authorities_hostname_associations_test
 
 import (
 	"context"
 	"fmt"
 	"os"
+	"strings"
 	"testing"
 
 	cfv1 "github.com/cloudflare/cloudflare-go"
@@ -14,14 +15,15 @@ import (
 	"github.com/hashicorp/terraform-plugin-testing/terraform"
 )
 
-func TestAccCloudflareCertificateAuthoritiesHostnameAssociations_Create(t *testing.T) {
+func TestAccCloudflareCertificateAuthoritiesHostnameAssociations_BYO_CA(t *testing.T) {
 	t.Parallel()
 	rnd := utils.GenerateRandomResourceName()
 	name := fmt.Sprintf("cloudflare_certificate_authorities_hostname_associations.%s", rnd)
 	accountID := os.Getenv("CLOUDFLARE_ACCOUNT_ID")
 	zoneID := os.Getenv("CLOUDFLARE_ZONE_ID")
 	zoneName := os.Getenv("CLOUDFLARE_DOMAIN")
-	hostname := rnd + "." + zoneName
+	hostname1 := rnd + "." + zoneName
+	hostname2 := rnd + "." + zoneName
 
 	resource.Test(t, resource.TestCase{
 		PreCheck: func() {
@@ -32,11 +34,57 @@ func TestAccCloudflareCertificateAuthoritiesHostnameAssociations_Create(t *testi
 		CheckDestroy:             testAccCheckCloudflareCertificateAuthoritiesHostnameAssociationsDestroy,
 		Steps: []resource.TestStep{
 			{
-				Config: testCertificateAuthoritiesHostnameAssociationsConfig(rnd, accountID, zoneID, hostname),
+				Config: testCertificateAuthoritiesHostnameAssociationsConfigBYOCA(rnd, accountID, zoneID, []string{hostname1}),
 				Check: resource.ComposeTestCheckFunc(
 					resource.TestCheckResourceAttr(name, consts.ZoneIDSchemaKey, zoneID),
 					resource.TestCheckResourceAttrSet(name, "mtls_certificate_id"),
-					resource.TestCheckResourceAttr(name, "hostnames.0", hostname),
+					//resource.TestCheckResourceAttr(name, "hostnames.0", hostname1),
+					//resource.TestCheckResourceAttr(name, "hostnames.1", hostname2),
+				),
+			},
+			{
+				Config: testCertificateAuthoritiesHostnameAssociationsConfigBYOCA(rnd, accountID, zoneID, []string{hostname1, hostname2}),
+				Check: resource.ComposeTestCheckFunc(
+					resource.TestCheckResourceAttr(name, consts.ZoneIDSchemaKey, zoneID),
+					resource.TestCheckResourceAttrSet(name, "mtls_certificate_id"),
+					//resource.TestCheckResourceAttr(name, "hostnames.0", hostname1),
+					//resource.TestCheckResourceAttr(name, "hostnames.1", hostname2),
+				),
+			},
+		},
+	})
+}
+
+func TestAccCloudflareCertificateAuthoritiesHostnameAssociations_DefaultCA(t *testing.T) {
+	t.Parallel()
+	rnd := utils.GenerateRandomResourceName()
+	name := fmt.Sprintf("cloudflare_certificate_authorities_hostname_associations.%s", rnd)
+	zoneID := os.Getenv("CLOUDFLARE_ZONE_ID")
+	zoneName := os.Getenv("CLOUDFLARE_DOMAIN")
+	hostname1 := rnd + "." + zoneName
+	hostname2 := rnd + "." + zoneName
+
+	resource.Test(t, resource.TestCase{
+		PreCheck: func() {
+			acctest.TestAccPreCheck(t)
+			acctest.TestAccPreCheck_Account(t)
+		},
+		ProtoV6ProviderFactories: acctest.TestAccProtoV6ProviderFactories,
+		CheckDestroy:             testAccCheckCloudflareCertificateAuthoritiesHostnameAssociationsDestroy,
+		Steps: []resource.TestStep{
+			{
+				Config: testCertificateAuthoritiesHostnameAssociationsConfigDefaultCA(rnd, zoneID, []string{hostname1}),
+				Check: resource.ComposeTestCheckFunc(
+					resource.TestCheckResourceAttr(name, consts.ZoneIDSchemaKey, zoneID),
+					resource.TestCheckResourceAttr(name, "hostnames.0", hostname1),
+				),
+			},
+			{
+				Config: testCertificateAuthoritiesHostnameAssociationsConfigDefaultCA(rnd, zoneID, []string{hostname1, hostname2}),
+				Check: resource.ComposeTestCheckFunc(
+					resource.TestCheckResourceAttr(name, consts.ZoneIDSchemaKey, zoneID),
+					resource.TestCheckResourceAttr(name, "hostnames.0", hostname1),
+					resource.TestCheckResourceAttr(name, "hostnames.1", hostname2),
 				),
 			},
 		},
@@ -50,21 +98,23 @@ func testAccCheckCloudflareCertificateAuthoritiesHostnameAssociationsDestroy(s *
 	}
 
 	for _, rs := range s.RootModule().Resources {
-		if rs.Type != "cloudflare_zero_trust_access_mtls_hostname_settings" {
+		if rs.Type != "cloudflare_certificate_authorities_hostname_associations" {
 			continue
 		}
 
 		if rs.Primary.Attributes[consts.ZoneIDSchemaKey] != "" {
-			settings, _ := client.GetAccessMutualTLSHostnameSettings(context.Background(), cfv1.ZoneIdentifier(rs.Primary.Attributes[consts.ZoneIDSchemaKey]))
-			if len(settings) != 0 {
-				return fmt.Errorf("AccessMutualTLSHostnameSettings still exists")
+			hostnames, _ := client.ListCertificateAuthoritiesHostnameAssociations(context.Background(), cfv1.ZoneIdentifier(rs.Primary.Attributes[consts.ZoneIDSchemaKey]), cfv1.ListCertificateAuthoritiesHostnameAssociationsParams{
+				MTLSCertificateID: rs.Primary.Attributes["mtls_certificate_id"],
+			})
+			if len(hostnames) != 0 {
+				return fmt.Errorf("CertificateAuthoritiesHostnameAssociations still exists")
 			}
 		}
 
 		if rs.Primary.Attributes[consts.AccountIDSchemaKey] != "" {
-			settings, _ := client.GetAccessMutualTLSHostnameSettings(context.Background(), cfv1.AccountIdentifier(rs.Primary.Attributes[consts.AccountIDSchemaKey]))
-			if len(settings) != 0 {
-				return fmt.Errorf("AccessMutualTLSHostnameSettings still exists")
+			hostnames, _ := client.ListCertificateAuthoritiesHostnameAssociations(context.Background(), cfv1.ZoneIdentifier(rs.Primary.Attributes[consts.ZoneIDSchemaKey]), cfv1.ListCertificateAuthoritiesHostnameAssociationsParams{})
+			if len(hostnames) != 0 {
+				return fmt.Errorf("CertificateAuthoritiesHostnameAssociations still exists")
 			}
 		}
 	}
@@ -72,7 +122,7 @@ func testAccCheckCloudflareCertificateAuthoritiesHostnameAssociationsDestroy(s *
 	return nil
 }
 
-func testCertificateAuthoritiesHostnameAssociationsConfig(rnd string, accountID string, zoneID string, hostname string) string {
+func testCertificateAuthoritiesHostnameAssociationsConfigBYOCA(rnd string, accountID string, zoneID string, hostnames []string) string {
 	return fmt.Sprintf(`
 resource "cloudflare_mtls_certificate" "%[1]s" {
 	account_id   = "%[2]s"
@@ -84,7 +134,16 @@ resource "cloudflare_mtls_certificate" "%[1]s" {
 resource "cloudflare_certificate_authorities_hostname_associations" "%[1]s" {
 	zone_id             = "%[3]s"
     mtls_certificate_id = cloudflare_mtls_certificate.%[1]s.id
-	hostnames = ["%[4]s"]
+	hostnames           = ["%[4]s"]
 }
-`, rnd, accountID, zoneID, hostname)
+`, rnd, accountID, zoneID, strings.Join(hostnames, `","`))
+}
+
+func testCertificateAuthoritiesHostnameAssociationsConfigDefaultCA(rnd string, zoneID string, hostnames []string) string {
+	return fmt.Sprintf(`
+resource "cloudflare_certificate_authorities_hostname_associations" "%[1]s" {
+	zone_id   = "%[2]s"
+	hostnames = ["%[3]s"]
+}
+`, rnd, zoneID, strings.Join(hostnames, `","`))
 }

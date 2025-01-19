@@ -7,6 +7,7 @@ import (
 
 	cfv1 "github.com/cloudflare/cloudflare-go"
 	"github.com/cloudflare/terraform-provider-cloudflare/internal/framework/muxclient"
+	"github.com/hashicorp/terraform-plugin-framework/attr"
 	"github.com/hashicorp/terraform-plugin-framework/path"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/hashicorp/terraform-plugin-framework/types"
@@ -91,14 +92,14 @@ func (r *CertificateAuthoritiesHostnameAssociationsResource) Read(ctx context.Co
 	resp.Diagnostics.Append(resp.State.Set(ctx, &data)...)
 }
 
-// Helper function used by both Update, Create and Delete
+// Helper function used by both Create and Update
 func (r *CertificateAuthoritiesHostnameAssociationsResource) update(ctx context.Context, data *CertificateAuthoritiesHostnameAssociationsModel) ([]cfv1.HostnameAssociation, error) {
 	updatedHostnames := []cfv1.HostnameAssociation{}
 	identifier := cfv1.ZoneIdentifier(data.ZoneID.ValueString())
 
 	hostnames := data.Hostnames
-	for _, hostname := range hostnames {
-		updatedHostnames = append(updatedHostnames, hostname.ValueString())
+	for _, hostname := range hostnames.Elements()() {
+		updatedHostnames = append(updatedHostnames, hostname.String())
 	}
 
 	updatedCertificateAuthoritiesHostnameAssociations := cfv1.UpdateCertificateAuthoritiesHostnameAssociationsParams{
@@ -179,13 +180,10 @@ func (r *CertificateAuthoritiesHostnameAssociationsResource) ImportState(ctx con
 	)
 }
 
-func buildCertificateAuthoritiesHostnameAssociationsModel(hostnames []cfv1.HostnameAssociation, mtlsCertificateID basetypes.StringValue, zoneID basetypes.StringValue) *CertificateAuthoritiesHostnameAssociationsModel {
-	model := &CertificateAuthoritiesHostnameAssociationsModel{
+func buildCertificateAuthoritiesHostnameAssociationsModel(hostnames basetypes.ListValue, mtlsCertificateID basetypes.StringValue, zoneID basetypes.StringValue) *CertificateAuthoritiesHostnameAssociationsModel {
+	return &CertificateAuthoritiesHostnameAssociationsModel{
 		ZoneID:            zoneID,
 		MTLSCertificateID: mtlsCertificateID,
+		Hostnames:         hostnames,
 	}
-	for _, hostname := range hostnames {
-		model.Hostnames = append(model.Hostnames, types.StringValue(hostname))
-	}
-	return model
 }
